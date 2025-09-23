@@ -4,7 +4,7 @@ import path from "node:path";
 
 type ResolutionPayload = {
   type: 'resolution';
-  title: string; sponsor: string; content: string;
+  title: string; sponsor: string; cosponsors?: string; content: string;
   committeeCode?: string | null;
 }
 
@@ -17,67 +17,114 @@ type AmendmentPayload = {
 type Payload = ResolutionPayload | AmendmentPayload;
 
 export async function POST(req: NextRequest){
-  let body: Payload;
-  try{ body = await req.json(); }
-  catch{ return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+  const contentType = req.headers.get('content-type') || '';
 
-  // Basic validation mirroring required fields
-  if(body.type === 'resolution'){
-    if(!body.title || !body.sponsor || !body.content) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-  } else if(body.type === 'amendment'){
-    if(!body.resolutionNumber || !body.content) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-  } else {
-    return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+  if(!supabaseUrl || !supabaseServiceKey){
+    return NextResponse.json({ error: 'Supabase not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.' }, { status: 500 });
   }
+  const headers = {
+    'apikey': supabaseServiceKey,
+    'Authorization': `Bearer ${supabaseServiceKey}`,
+  } as const;
 
-  // Enforce committee code presence (login requirement)
-  if(!('committeeCode' in body) || !body.committeeCode){
-    return NextResponse.json({ error: 'Committee not set. Please login.' }, { status: 401 });
-  }
 
-  const record = {
-    ...body,
-    submittedAt: new Date().toISOString(),
-    ip: req.headers.get('x-forwarded-for') || 'unknown'
-  };
+  if (contentType.includes('multipart/form-data')) {
+    // Resolution submission with file upload
+    const formData = await req.formData();
+    const type = formData.get('type') as string;
+    const committeeCode = formData.get('committeeCode') as string;
+    const title = formData.get('title') as string;
+    const sponsor = formData.get('sponsor') as string;
+    const cosponsors = formData.get('cosponsors') as string;
+    const file = formData.get('content') as File;
 
-  // Supabase is required; do not silently fallback so we surface issues clearly
-  try{
-    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseServiceKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-    if(!supabaseUrl || !supabaseServiceKey){
-      return NextResponse.json({ error: 'Supabase not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.' }, { status: 500 });
+    if (type !== 'resolution' || !title || !sponsor || !file) {
+      return NextResponse.json({ error: 'Missing fields for resolution' }, { status: 400 });
     }
 
-    const headers = {
-      'Content-Type': 'application/json',
-      'apikey': supabaseServiceKey,
-      'Authorization': `Bearer ${supabaseServiceKey}`,
-      'Prefer': 'return=representation'
-    } as const;
+    if (!committeeCode) {
+      return NextResponse.json({ error: 'Committee not set. Please login.' }, { status: 401 });
+    }
 
-    if(body.type === 'resolution'){
-      const payload = {
-        title: body.title,
-        country: body.sponsor,
-        content: body.content,
-        committee_code: body.committeeCode || null
-      };
-      const resp = await fetch(`${supabaseUrl}/rest/v1/resolutions`, { method: 'POST', headers, body: JSON.stringify(payload) });
-      if(!resp.ok){
-        const t = await resp.text();
-        console.error('Supabase insert error (resolutions):', t);
-        return NextResponse.json({ error: 'Supabase insert failed', detail: t }, { status: resp.status || 500 });
+    // Upload file to Supabase Storage
+    try {
+      const fileExtension = path.extname(file.name);
+      const fileName = `${committeeCode}-${title.replace(/[^a-zA-Z0-9]/g, '-')}-${Date.now()}${fileExtension}`;
+      const fileBuffer = await file.arrayBuffer();
+      const uploadResponse = await fetch(`${supabaseUrl}/storage/v1/object/resolutions/${fileName}`, {
+        method: 'POST',
+        headers: {
+            ...headers,
+            'Content-Type': file.type,
+        },
+        body: fileBuffer
+      });
+
+      if (!uploadResponse.ok) {
+        const t = await uploadResponse.text();
+        console.error('Supabase storage upload error:', t);
+        return NextResponse.json({ error: 'Supabase storage upload failed', detail: t }, { status: uploadResponse.status || 500 });
       }
-      const data = await resp.json().catch(()=>null);
+
+      const publicURL = `${supabaseUrl}/storage/v1/object/public/resolutions/${fileName}`;
+
+      // Now, insert metadata into the 'resolutions' table
+      const payload = {
+        title: title,
+        country: sponsor,
+        cosponsors: cosponsors,
+        content: publicURL, // The URL of the uploaded file
+        committee_code: committeeCode || null
+      };
+
+      const dbResponse = await fetch(`${supabaseUrl}/rest/v1/resolutions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...headers,
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(payload)
+      });
+
+      if(!dbResponse.ok){
+        const t = await dbResponse.text();
+        console.error('Supabase insert error (resolutions):', t);
+        return NextResponse.json({ error: 'Supabase insert failed', detail: t }, { status: dbResponse.status || 500 });
+      }
+      const data = await dbResponse.json().catch(()=>null);
       return NextResponse.json({ ok: true, data });
+
+    } catch (err) {
+      console.error('Resolution submission error', err);
+      return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 });
+    }
+
+  } else {
+    // Existing logic for amendments
+    let body: Payload;
+    try{ body = await req.json(); }
+    catch{ return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+
+    if (body.type === 'amendment') {
+      if(!body.resolutionNumber || !body.content) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     } else {
+      return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
+    }
+
+    if(!('committeeCode' in body) || !body.committeeCode){
+      return NextResponse.json({ error: 'Committee not set. Please login.' }, { status: 401 });
+    }
+
+    try{
       const payload = {
         resolution_number: body.resolutionNumber,
         content: body.content,
         committee_code: body.committeeCode || null
       };
-      const resp = await fetch(`${supabaseUrl}/rest/v1/amendments`, { method: 'POST', headers, body: JSON.stringify(payload) });
+      const resp = await fetch(`${supabaseUrl}/rest/v1/amendments`, { method: 'POST', headers: {...headers, 'Content-Type': 'application/json', 'Prefer': 'return=representation'}, body: JSON.stringify(payload) });
       if(!resp.ok){
         const t = await resp.text();
         console.error('Supabase insert error (amendments):', t);
@@ -85,9 +132,9 @@ export async function POST(req: NextRequest){
       }
       const data = await resp.json().catch(()=>null);
       return NextResponse.json({ ok: true, data });
+    }catch(err){
+      console.error('Amendment submission error', err);
+      return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 });
     }
-  }catch(err){
-    console.error('Supabase storage error', err);
-    return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 });
   }
 }

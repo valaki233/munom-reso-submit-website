@@ -143,3 +143,19 @@ html, body {
   margin-top: 12px; color: #0a7d32; font-weight: 500;
 }
 .error { margin-top: 12px; color: #b91c1c; font-weight: 500; }
+
+.file-upload-label {
+  cursor: pointer;
+  background-color: #f8f9fa;
+  color: #555;
+  border: 1px solid #ddd;
+  padding: 22px 24px;
+  border-radius: 24px;
+  font-size: 18px;
+  display: block;
+  text-align: center;
+}
+
+#file-upload {
+  display: none;
+}
