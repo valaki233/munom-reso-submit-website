@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
+import { Route } from "next";
 
 type Props = {
   redirect?: string | ((committee: any) => string);
@@ -18,11 +19,11 @@ function getSupabaseClient(url?: string, key?: string) {
   const envUrl =
     url ??
     process.env.NEXT_PUBLIC_SUPABASE_URL ??
-    process.env.EXPO_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
   const envKey =
     key ??
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!envUrl || !envKey) {
     throw new Error(
@@ -79,7 +80,7 @@ export default function CommitteeCodeLogin({
           ? redirect(data)
           : redirect ?? "/committee";
 
-      router.push(target);
+      router.push(target as Route);
     } catch (err) {
       console.error(err);
       setError("Unexpected error. Please try again.");
@@ -89,7 +90,11 @@ export default function CommitteeCodeLogin({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="stack" style={{ maxWidth: 560, margin: "0 auto" }}>
+    <form
+      onSubmit={handleSubmit}
+      className="stack"
+      style={{ maxWidth: 560, margin: "0 auto" }}
+    >
       <label htmlFor="committee-code" className="" style={{ color: "#6b7280" }}>
         Enter your committee code
       </label>
@@ -109,4 +114,3 @@ export default function CommitteeCodeLogin({
     </form>
   );
 }
-
