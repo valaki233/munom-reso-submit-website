@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CommitteeGuard from "@/components/CommitteeGuard";
 import { CaretDown, PaperPlane } from "@/components/Icons";
@@ -7,7 +7,7 @@ import { CaretDown, PaperPlane } from "@/components/Icons";
 type FormType = "resolution" | "amendment";
 
 export default function Committee() {
-  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const [type, setType] = useState<FormType>("resolution");
   const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -38,12 +38,38 @@ export default function Committee() {
         ) {
           throw new Error("Please fill in all fields and select a file.");
         }
-        formData.append("type", type);
-        if (committeeCode) formData.append("committeeCode", committeeCode);
 
-        res = await fetch("/api/submit", {
+        // Check file size (10MB limit)
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+        if (file.size > MAX_FILE_SIZE) {
+          throw new Error("File is too large. Maximum size is 10MB.");
+        }
+
+        // Read as base64 and send as JSON to proxy
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error("Failed to read file"));
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+
+        // Send to proxy which will forward to Make
+        const payload = {
+          fileName: file.name,
+          data_base64: dataUrl.split(",")[1], // remove data:...;base64, prefix
+          title: String(formData.get("title")),
+          sponsor: String(formData.get("sponsor")),
+          cosponsors: formData.get("cosponsors")
+            ? String(formData.get("cosponsors"))
+            : undefined,
+          committeeCode: committeeCode || undefined,
+          type,
+        };
+
+        res = await fetch("/api/make-proxy", {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
         });
       } else {
         // amendment
@@ -71,9 +97,8 @@ export default function Committee() {
           ? "Resolution submitted ✔️"
           : "Amendment submitted ✔️"
       );
-      (
-        document.getElementById("committee-submit-form") as HTMLFormElement
-      )?.reset();
+      formRef.current?.reset();
+      setFileName(null);
     } catch (e: any) {
       setError(e.message || "Something went wrong");
     } finally {
@@ -123,11 +148,7 @@ export default function Committee() {
       </header>
       <main className="content">
         {type === "resolution" ? (
-          <form
-            id="committee-submit-form"
-            action={(fd) => onSubmit(fd)}
-            className="stack"
-          >
+          <form ref={formRef} action={(fd) => onSubmit(fd)} className="stack">
             <input
               className="input"
               name="title"
@@ -165,11 +186,7 @@ export default function Committee() {
             </button>
           </form>
         ) : (
-          <form
-            id="committee-submit-form"
-            action={(fd) => onSubmit(fd)}
-            className="stack"
-          >
+          <form ref={formRef} action={(fd) => onSubmit(fd)} className="stack">
             <input
               className="input"
               name="resolutionNumber"
