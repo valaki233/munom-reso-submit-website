@@ -108,7 +108,14 @@ export default function CommitteeCodeLogin({
         className="input"
       />
       <button type="submit" disabled={loading} className="btn-primary">
-        {loading ? "Verifying…" : "Continue"}
+        {loading ? (
+          <>
+            <span className="spinner" />
+            Verifying…
+          </>
+        ) : (
+          "Continue"
+        )}
       </button>
       {error && <p style={{ color: "#b91c1c", marginTop: 4 }}>{error}</p>}
     </form>

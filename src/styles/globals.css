@@ -103,6 +103,38 @@ html, body {
   gap: 14px;
   justify-content: center;
   box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-primary:hover {
+  background: #1a243a; /* A slightly lighter navy */
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+  box-shadow: 0 5px 15px rgba(2,6,23,0.1);
+}
+
+.btn-primary:disabled {
+  cursor: not-allowed;
+  background: #1a243a;
+  opacity: 0.8;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: var(--white);
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .plane-icon { width: 20px; height: 20px; }

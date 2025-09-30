@@ -181,7 +181,7 @@ export default function Committee() {
               }
             />
             <button className="btn-primary" type="submit" disabled={loading}>
-              <PaperPlane />
+              {loading ? <span className="spinner" /> : <PaperPlane />}
               {loading ? "Submitting…" : "Submit Resolution"}
             </button>
           </form>
@@ -200,7 +200,7 @@ export default function Committee() {
               required
             />
             <button className="btn-primary" type="submit" disabled={loading}>
-              <PaperPlane />
+              {loading ? <span className="spinner" /> : <PaperPlane />}
               {loading ? "Submitting…" : "Submit Amendment"}
             </button>
           </form>

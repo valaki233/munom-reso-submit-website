@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: Request) {
   try {
@@ -37,35 +36,16 @@ export async function POST(req: Request) {
         body: formData,
     });
 
-    // Insert metadata into Supabase
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    let supabaseError = null;
-    if (supabaseUrl && supabaseAnonKey) {
-      const supabase = createClient(supabaseUrl, supabaseAnonKey);
-      const { error } = await supabase
-        .from('resolutions')
-        .insert([
-          { 
-            title: body.title, 
-            country: body.sponsor, 
-            committee_code: body.committeeCode, 
-            cosponsors: body.cosponsors 
-          }
-        ]);
-      if (error) {
-        supabaseError = error.message;
-      }
-    } else {
-      supabaseError = "Supabase URL or anon key not provided in environment variables.";
+    if (!zapierResponse.ok) {
+      const errorText = await zapierResponse.text();
+      console.error("make.com webhook error:", errorText);
+      return NextResponse.json({ error: `Submission failed: ${errorText}` }, { status: zapierResponse.status });
     }
 
     // Return success with webhook status
     return NextResponse.json({
       ok: true,
-      zapierWebhookStatus: zapierResponse.status,
-      supabaseError: supabaseError
+      zapierWebhookStatus: zapierResponse.status
     });
   } catch (err: any) {
     console.error("make-proxy error:", err);
