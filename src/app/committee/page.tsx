@@ -8,6 +8,7 @@ type FormType = "resolution" | "amendment";
 
 export default function Committee() {
   const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
   const [type, setType] = useState<FormType>("resolution");
   const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -38,38 +39,12 @@ export default function Committee() {
         ) {
           throw new Error("Please fill in all fields and select a file.");
         }
+        formData.append("type", type);
+        if (committeeCode) formData.append("committeeCode", committeeCode);
 
-        // Check file size (10MB limit)
-        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
-        if (file.size > MAX_FILE_SIZE) {
-          throw new Error("File is too large. Maximum size is 10MB.");
-        }
-
-        // Read as base64 and send as JSON to proxy
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onerror = () => reject(new Error("Failed to read file"));
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-
-        // Send to proxy which will forward to Make
-        const payload = {
-          fileName: file.name,
-          data_base64: dataUrl.split(",")[1], // remove data:...;base64, prefix
-          title: String(formData.get("title")),
-          sponsor: String(formData.get("sponsor")),
-          cosponsors: formData.get("cosponsors")
-            ? String(formData.get("cosponsors"))
-            : undefined,
-          committeeCode: committeeCode || undefined,
-          type,
-        };
-
-        res = await fetch("/api/make-proxy", {
+        res = await fetch("/api/submit", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: formData,
         });
       } else {
         // amendment
