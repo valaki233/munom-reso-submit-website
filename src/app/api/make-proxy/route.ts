@@ -15,7 +15,7 @@ export async function POST(req: Request) {
       ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       : 'application/msword';
 
-    // Send file to Zapier webhook
+    // Send file to maek.com webhook
     const zapierWebhookUrl = "https://hook.eu2.make.com/weadmgdt24ccwf818mjine2vwib8g8e6";
     const formData = new FormData();
     formData.append("file", new Blob([fileBuffer], { type: mimeType }), body.fileName);
