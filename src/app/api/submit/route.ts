@@ -48,53 +48,61 @@ export async function POST(req: NextRequest){
       return NextResponse.json({ error: 'Committee not set. Please login.' }, { status: 401 });
     }
 
-    // Upload file to Supabase Storage
     try {
-      const fileExtension = path.extname(file.name);
-      const fileName = `${committeeCode}-${title.replace(/[^a-zA-Z0-9]/g, '-')}-${Date.now()}${fileExtension}`;
+      // Convert file to base64
       const fileBuffer = await file.arrayBuffer();
-      const uploadResponse = await fetch(`${supabaseUrl}/storage/v1/object/resolutions/${fileName}`, {
+      const data_base64 = Buffer.from(fileBuffer).toString('base64');
+
+      // Send to make-proxy
+      const proxyResponse = await fetch(new URL('/api/make-proxy', req.url), {
         method: 'POST',
         headers: {
-            ...headers,
-            'Content-Type': file.type,
+          'Content-Type': 'application/json',
         },
-        body: fileBuffer
+        body: JSON.stringify({
+          data_base64,
+          fileName: file.name,
+          title,
+          sponsor,
+          cosponsors,
+          committeeCode,
+          type,
+        }),
       });
 
-      if (!uploadResponse.ok) {
-        const t = await uploadResponse.text();
-        console.error('Supabase storage upload error:', t);
-        return NextResponse.json({ error: 'Supabase storage upload failed', detail: t }, { status: uploadResponse.status || 500 });
+      if (!proxyResponse.ok) {
+        const errorText = await proxyResponse.text();
+        console.error('make-proxy error:', errorText);
+        return NextResponse.json({ error: 'Failed to submit to make-proxy', detail: errorText }, { status: proxyResponse.status || 500 });
       }
 
-      const publicURL = `${supabaseUrl}/storage/v1/object/public/resolutions/${fileName}`;
-
-      // Now, insert metadata into the 'resolutions' table
+      // Now, insert metadata into the 'resolutions' table in Supabase
       const payload = {
         title: title,
         country: sponsor,
         cosponsors: cosponsors,
-        content: publicURL, // The URL of the uploaded file
         committee_code: committeeCode || null
+        // The 'content' field (the file itself) is not sent to Supabase anymore
       };
 
       const dbResponse = await fetch(`${supabaseUrl}/rest/v1/resolutions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...headers,
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify(payload)
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers,
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(payload)
       });
 
-      if(!dbResponse.ok){
+      if (!dbResponse.ok) {
         const t = await dbResponse.text();
         console.error('Supabase insert error (resolutions):', t);
+        // TODO: Should we try to undo the make.com submission?
         return NextResponse.json({ error: 'Supabase insert failed', detail: t }, { status: dbResponse.status || 500 });
       }
-      const data = await dbResponse.json().catch(()=>null);
+
+      const data = await dbResponse.json().catch(() => null);
       return NextResponse.json({ ok: true, data });
 
     } catch (err) {
