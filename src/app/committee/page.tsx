@@ -15,18 +15,24 @@ export default function Committee() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [committeeCode, setCommitteeCode] = useState<string | null>(null);
+  const [country, setCountry] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       setCommitteeCode(localStorage.getItem("userCommittee"));
+      setCountry(localStorage.getItem("userCountry"));
     } catch {}
   }, []);
 
-  async function onSubmit(formData: FormData) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
     setLoading(true);
     setMessage(null);
     setError(null);
+
     try {
       let res;
       if (type === "resolution") {
@@ -41,6 +47,7 @@ export default function Committee() {
         }
         formData.append("type", type);
         if (committeeCode) formData.append("committeeCode", committeeCode);
+        if (country) formData.append("country", country);
 
         res = await fetch("/api/submit", {
           method: "POST",
@@ -55,7 +62,7 @@ export default function Committee() {
         res = await fetch("/api/submit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type, committeeCode, ...payload }),
+          body: JSON.stringify({ type, committeeCode, country, ...payload }),
         });
       }
 
@@ -83,19 +90,65 @@ export default function Committee() {
 
   return (
     <>
+      {loading && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999,
+          color: 'white',
+          fontSize: '2rem'
+        }}>
+          Submitting...
+        </div>
+      )}
       <CommitteeGuard />
       <header className="page-header">
-        <div className="title type-select">
-          Submit{" "}
-          <span className="blue">
-            {type === "resolution" ? "Resolution" : "Amendment"}
-          </span>
+        <div
+          className="title type-select"
+          style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}
+        >
+          Submit&nbsp;
           <button
-            aria-label="Change type"
-            onClick={() => setMenuOpen((v) => !v)}
-            className="caret"
+            onClick={() => setType("resolution")}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              margin: 0,
+              textDecoration: "underline",
+              cursor: "pointer",
+              color: type === "resolution" ? "blue" : "inherit",
+              fontSize: "inherit",
+              fontFamily: "inherit",
+            }}
+            disabled={loading}
           >
-            <CaretDown />
+            Resolution
+          </button>
+          &nbsp;or&nbsp;
+          <button
+            onClick={() => setType("amendment")}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              margin: 0,
+              textDecoration: "underline",
+              cursor: "pointer",
+              color: type === "amendment" ? "blue" : "inherit",
+              fontSize: "inherit",
+              fontFamily: "inherit",
+            }}
+            disabled={loading}
+          >
+            Amendment
           </button>
           {menuOpen && (
             <div className="type-menu" onMouseLeave={() => setMenuOpen(false)}>
@@ -123,57 +176,64 @@ export default function Committee() {
       </header>
       <main className="content">
         {type === "resolution" ? (
-          <form ref={formRef} action={(fd) => onSubmit(fd)} className="stack">
-            <input
-              className="input"
-              name="title"
-              placeholder="Resolution Title"
-              required
-            />
-            <input
-              className="input"
-              name="sponsor"
-              placeholder="Sponsoring Country"
-              required
-            />
-            <input
-              className="input"
-              name="cosponsors"
-              placeholder="Co-sponsoring Countries (optional)"
-            />
-            <label htmlFor="file-upload" className="input file-upload-label">
-              {fileName || "Resolution File (.doc, .docx, .pdf)"}
-            </label>
-            <input
-              id="file-upload"
-              className="input"
-              type="file"
-              name="content"
-              accept=".doc,.docx,.pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              required
-              onChange={(e) =>
-                setFileName(e.target.files ? e.target.files[0].name : null)
-              }
-            />
+          <form ref={formRef} onSubmit={handleSubmit} className="stack">
+            <fieldset
+              disabled={loading}
+              className="stack"
+              style={{ border: "none", padding: 0, margin: 0 }}
+            >
+              <input
+                className="input"
+                name="title"
+                placeholder="Resolution Title"
+                required
+              />
+              <input
+                className="input"
+                name="sponsor"
+                placeholder="Co-submitters"
+                required
+              />
+              <label htmlFor="file-upload" className="input file-upload-label">
+                {fileName || "Resolution File (.doc, .docx, .pdf)"}
+              </label>
+              <input
+                id="file-upload"
+                className="input"
+                type="file"
+                name="content"
+                accept=".doc,.docx,.pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                required
+                onChange={(e) =>
+                  setFileName(e.target.files ? e.target.files[0].name : null)
+                }
+              />
+            </fieldset>
             <button className="btn-primary" type="submit" disabled={loading}>
               {loading ? <span className="spinner" /> : <PaperPlane />}
               {loading ? "Submitting…" : "Submit Resolution"}
             </button>
           </form>
         ) : (
-          <form ref={formRef} action={(fd) => onSubmit(fd)} className="stack">
-            <input
-              className="input"
-              name="resolutionNumber"
-              placeholder="Amendment To (Resolution #)"
-              required
-            />
-            <textarea
-              className="input textarea"
-              name="content"
-              placeholder="Amendment Content"
-              required
-            />
+          <form ref={formRef} onSubmit={handleSubmit} className="stack">
+            <fieldset
+              disabled={loading}
+              className="stack"
+              style={{ border: "none", padding: 0, margin: 0 }}
+            >
+              <input
+                className="input"
+                name="resolutionNumber"
+                placeholder="Resolution to amend"
+                required
+              />
+              <textarea
+                className="input textarea"
+                name="content"
+                placeholder="Amendment Content"
+                required
+              />
+            </fieldset>
             <button className="btn-primary" type="submit" disabled={loading}>
               {loading ? <span className="spinner" /> : <PaperPlane />}
               {loading ? "Submitting…" : "Submit Amendment"}

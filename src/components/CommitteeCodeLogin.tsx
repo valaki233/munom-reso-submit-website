@@ -45,6 +45,7 @@ export default function CommitteeCodeLogin({
   supabaseAnonKey,
 }: Props) {
   const [code, setCode] = useState("");
+  const [country, setCountry] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -52,9 +53,14 @@ export default function CommitteeCodeLogin({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const trimmed = code.trim();
-    if (!trimmed) {
+    const trimmedCode = code.trim();
+    const trimmedCountry = country.trim();
+    if (!trimmedCode) {
       setError("Please enter a code.");
+      return;
+    }
+    if (!trimmedCountry) {
+      setError("Please enter your country.");
       return;
     }
 
@@ -65,7 +71,7 @@ export default function CommitteeCodeLogin({
       const { data, error: dbError } = await supabase
         .from("committees")
         .select("*")
-        .eq("committee_code", trimmed)
+        .eq("committee_code", trimmedCode)
         .single();
 
       if (dbError || !data) {
@@ -73,7 +79,8 @@ export default function CommitteeCodeLogin({
         return;
       }
 
-      localStorage.setItem(localStorageKey, trimmed);
+      localStorage.setItem(localStorageKey, trimmedCode);
+      localStorage.setItem("userCountry", trimmedCountry);
 
       const target =
         typeof redirect === "function"
@@ -104,6 +111,18 @@ export default function CommitteeCodeLogin({
         value={code}
         onChange={(e) => setCode(e.target.value)}
         placeholder="e.g. GA1, ECOSOC-02"
+        disabled={loading}
+        className="input"
+      />
+      <label htmlFor="country" className="" style={{ color: "#6b7280", marginTop: '1rem' }}>
+        Enter your country
+      </label>
+      <input
+        id="country"
+        type="text"
+        value={country}
+        onChange={(e) => setCountry(e.target.value)}
+        placeholder="e.g. France, Brazil"
         disabled={loading}
         className="input"
       />

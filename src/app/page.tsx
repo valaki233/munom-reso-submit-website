@@ -6,7 +6,7 @@ import { CaretDown, PaperPlane } from "@/components/Icons";
 
 type FormType = "resolution" | "amendment";
 
-export default function SubmitPage(){
+export default function SubmitPage() {
   const router = useRouter();
   const [type, setType] = useState<FormType>("resolution");
   const [open, setOpen] = useState(false);
@@ -15,42 +15,60 @@ export default function SubmitPage(){
   const [error, setError] = useState<string | null>(null);
   const [committeeCode, setCommitteeCode] = useState<string | null>(null);
 
-  // Load committee code (if previously stored by auth/role flow)
-  // Mirrors mobile app's AsyncStorage('userCommittee') usage
   useEffect(() => {
     try {
-      const code = localStorage.getItem('userCommittee');
+      const code = localStorage.getItem("userCommittee");
       setCommitteeCode(code);
-      if (code) {
-        router.replace('/committee');
-      }
     } catch {}
-  }, [router]);
+  }, []);
 
-  async function onSubmit(formData: FormData){
+  async function onSubmit(formData: FormData) {
     setLoading(true);
-    setMessage(null); setError(null);
-    try{
+    setMessage(null);
+    setError(null);
+    try {
       const payload = Object.fromEntries(formData.entries());
-      const res = await fetch('/api/submit', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, committeeCode, ...payload })
+      const res = await fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, committeeCode, ...payload }),
       });
-      if(!res.ok){
+      if (!res.ok) {
         const t = await res.text();
-        throw new Error(t || 'Submission failed');
+        throw new Error(t || "Submission failed");
       }
-      setMessage(type === 'resolution' ? 'Resolution submitted ✔️' : 'Amendment submitted ✔️');
-      (document.getElementById('submit-form') as HTMLFormElement)?.reset();
-    }catch(e:any){
-      setError(e.message || 'Something went wrong');
-    }finally{
+      setMessage(
+        type === "resolution"
+          ? "Resolution submitted ✔️"
+          : "Amendment submitted ✔️"
+      );
+      (document.getElementById("submit-form") as HTMLFormElement)?.reset();
+    } catch (e: any) {
+      setError(e.message || "Something went wrong");
+    } finally {
       setLoading(false);
     }
   }
 
-  // This page only routes users; content never renders
-  return <CommitteeGuard/>;
+  return (
+    <main>
+      <div style={{ margin: 'auto', maxWidth: '600px', paddingTop: '2rem' }}>
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+          <button onClick={() => setType("resolution")} style={{ all: 'unset', cursor: 'pointer', padding: '0.5rem 1rem', borderBottom: type === 'resolution' ? '2px solid' : '2px solid transparent' }}>Resolution</button>
+          <button onClick={() => setType("amendment")} style={{ all: 'unset', cursor: 'pointer', padding: '0.5rem 1rem', borderBottom: type === 'amendment' ? '2px solid' : '2px solid transparent' }}>Amendment</button>
+        </div>
+
+        {message && <p style={{ color: 'green' }}>{message}</p>}
+        {error && <p style={{ color: 'red' }}>{error}</p>}
+
+        {type === "resolution" ? (
+          <ResolutionForm onSubmit={onSubmit} loading={loading} />
+        ) : (
+          <AmendmentForm onSubmit={onSubmit} loading={loading} />
+        )}
+      </div>
+    </main>
+  );
 }
 
 function ResolutionForm({ onSubmit, loading }: { onSubmit: (fd: FormData)=>void; loading: boolean }){
